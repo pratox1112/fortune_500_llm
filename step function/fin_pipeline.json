@@ -1,0 +1,81 @@
+{
+  "Comment": "Pipeline for SyncKB -> Yahoo + SEC -> Glue -> Bedrock -> Delete S3",
+  "StartAt": "PreSyncKB",
+  "States": {
+    "PreSyncKB": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:183295421422:function:sync-kb",
+      "ResultPath": null,
+      "Next": "FetchData"
+    },
+    "FetchData": {
+      "Type": "Parallel",
+      "Branches": [
+        {
+          "StartAt": "YahooLambda",
+          "States": {
+            "YahooLambda": {
+              "Type": "Task",
+              "Resource": "arn:aws:lambda:us-east-1:183295421422:function:fetch_yahoo",
+              "Parameters": {
+                "ticker.$": "$.ticker"
+              },
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "SECLambda",
+          "States": {
+            "SECLambda": {
+              "Type": "Task",
+              "Resource": "arn:aws:lambda:us-east-1:183295421422:function:get_sec",
+              "Parameters": {
+                "company.$": "$.company"
+              },
+              "End": true
+            }
+          }
+        }
+      ],
+      "Next": "GlueHtmlToJson"
+    },
+    "GlueHtmlToJson": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": {
+        "JobName": "html_to_json"
+      },
+      "Next": "GlueChunking"
+    },
+    "GlueChunking": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": {
+        "JobName": "chunking"
+      },
+      "Next": "SyncBedrockKB"
+    },
+    "SyncBedrockKB": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:183295421422:function:sync-kb",
+      "Next": "WaitForKB"
+    },
+    "WaitForKB": {
+      "Type": "Wait",
+      "Seconds": 60,
+      "Next": "RetrieveAndGenerate"
+    },
+    "RetrieveAndGenerate": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:183295421422:function:retrieve_generate",
+      "Next": "DeleteS3"
+    },
+    "DeleteS3": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:183295421422:function:delete-s3-folders",
+      "ResultPath": null,
+      "End": true
+    }
+  }
+}
