@@ -289,5 +289,4 @@ The authors are not responsible for any misuse of this software.
 
 ## 📧 Contact
 
-Pratosh Karthikeyan
-Northeastern University
+Pratosh Karthikeyan | Northeastern University
