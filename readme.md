@@ -83,13 +83,13 @@ yfinance>=0.2.0  # Alternative helper library
 ```
 fortune_500_llm/
 ├── lambda/
-│   ├── sync_kb.py/           
-│   ├── fetch_yahoo.py/          
-│   ├── get_sec.py/            
-│   ├── api_gateway.py/       
-│   ├── retrieve_and_generate.py/ 
-|   ├── describe_state.py/ 
-│   └── delete_s3_folders.py/             
+│   ├── sync_kb.py           
+│   ├── fetch_yahoo.py
+│   ├── get_sec.py         
+│   ├── api_gateway.py       
+│   ├── retrieve_and_generate.py
+|   ├── describe_state.py
+│   └── delete_s3_folders.py
 ├── glue/
 │   ├── sec_html_to_json.py        
 │   └── chunking.py            
