@@ -1,70 +1,79 @@
 import streamlit as st
 import requests
-import time
 import json
-import config 
 
-# Replace with your API Gateway endpoints
+# API endpoints
+START_API = "https://f9uq2y80jj.execute-api.us-east-1.amazonaws.com/test"
+STATUS_API = "https://ee7385n43f.execute-api.us-east-1.amazonaws.com/test"
+QUERY_API = "https://kzlmwc1f8k.execute-api.us-east-1.amazonaws.com/dev/query"
 
-st.set_page_config(page_title="Financial Data Pipeline", page_icon="📊", layout="centered")
-st.title("📊 Financial Data Pipeline Runner")
+st.set_page_config(page_title="Fortune 500 Chatbot", page_icon="📊", layout="wide")
+st.title("📊 Fortune 500 Company Chatbot")
 
-# Inputs
+# ---------------------------
+# 1. Inputs for company
+# ---------------------------
 ticker = st.text_input("Stock Ticker (Yahoo)", value="TSLA")
 company = st.text_input("Company Name (SEC)", value="Tesla")
 
+# ---------------------------
+# 2. Run pipeline (trigger once, no infinite loop)
+# ---------------------------
 if st.button("🚀 Run Pipeline"):
-    with st.spinner("Starting pipeline..."):
-        # Start the pipeline
+    with st.spinner(f"Starting pipeline for {company}..."):
         try:
-            start_resp = requests.post(config.START_API, json={"ticker": ticker, "company": company})
-            start_resp.raise_for_status()
+            start_resp = requests.post(START_API, json={"ticker": ticker, "company": company})
             data = start_resp.json()
+            exec_arn = data.get("executionArn")
+            if exec_arn:
+                st.success(f"Pipeline triggered for {company}. Execution ARN: {exec_arn}")
+
+                # Check status once (not looping forever)
+                status_resp = requests.post(STATUS_API, json={"executionArn": exec_arn})
+                status_data = status_resp.json()
+                st.info(f"Pipeline current status: {status_data.get('status')}")
+            else:
+                st.error("Pipeline did not return an execution ARN.")
         except Exception as e:
             st.error(f"Failed to start pipeline: {e}")
-            st.stop()
 
-        exec_arn = data.get("executionArn")
-        if not exec_arn:
-            st.error("No execution ARN returned. Check Lambda/API config.")
-            st.stop()
+# ---------------------------
+# 3. Chatbot
+# ---------------------------
+st.subheader(f"💬 Chat with {company}'s Financial Data")
 
-        st.info(f"Pipeline started. Execution ARN:\n\n`{exec_arn}`")
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
 
-        # Poll status
-        while True:
-            try:
-                status_resp = requests.post(config.STATUS_API, json={"executionArn": exec_arn})
-                status_resp.raise_for_status()
-                status_data = status_resp.json()
-            except Exception as e:
-                st.error(f"Failed to fetch status: {e}")
-                st.stop()
+# Display history
+for role, text in st.session_state.chat_history:
+    with st.chat_message(role):
+        st.write(text)
 
-            status = status_data.get("status")
+# Chat input
+if question := st.chat_input("Ask a question..."):
+    # Add user msg
+    st.session_state.chat_history.append(("user", question))
+    with st.chat_message("user"):
+        st.write(question)
 
-            # Show live status
-            with st.empty():
-                st.write(f"🔄 Current Status: **{status}**")
+    try:
+        resp = requests.post(QUERY_API, json={"question": question, "company": company}, timeout=60)
+        data = resp.json()
+        if "body" in data and isinstance(data["body"], str):
+            data = json.loads(data["body"])
 
-            if status in ["SUCCEEDED", "FAILED", "TIMED_OUT", "ABORTED"]:
-                break
+        answer = data.get("answer", "No answer found.")
+        citations = data.get("citations", [])
 
-            time.sleep(5)
+        response_text = answer
+        if citations:
+            response_text += "\n\nSources:\n" + "\n".join([str(c) for c in citations])
 
-        # ✅ Final output handling
-        if status == "SUCCEEDED":
-            st.success("✅ Pipeline finished successfully!")
+    except Exception as e:
+        response_text = f"Error: {e}"
 
-            output = status_data.get("output", {})
-
-            # Just display the answer text
-            if isinstance(output, dict) and "answer" in output:
-                st.subheader("Summary")
-                st.write(output["answer"])
-            else:
-                st.warning("No answer found in output. Showing raw output:")
-                st.json(output)
-
-        else:
-            st.error(f"❌ Pipeline ended with status: {status}")
+    # Add assistant msg
+    st.session_state.chat_history.append(("assistant", response_text))
+    with st.chat_message("assistant"):
+        st.write(response_text)
